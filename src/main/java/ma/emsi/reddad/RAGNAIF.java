@@ -12,10 +12,19 @@ import dev.langchain4j.model.embedding.EmbeddingModel;
 import dev.langchain4j.model.embedding.onnx.allminilml6v2.AllMiniLmL6V2EmbeddingModel;
 import dev.langchain4j.store.embedding.EmbeddingStore;
 import dev.langchain4j.store.embedding.inmemory.InMemoryEmbeddingStore;
+import dev.langchain4j.memory.chat.MessageWindowChatMemory;
+import dev.langchain4j.model.chat.ChatModel;
+import dev.langchain4j.model.googleai.GoogleAiGeminiChatModel;
+import dev.langchain4j.rag.content.retriever.EmbeddingStoreContentRetriever;
+import dev.langchain4j.service.AiServices;
+import ma.emsi.reddad.llm.Assistant;
 
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
+import java.util.Scanner;
+
+
 
 public class RAGNAIF {
 
@@ -47,6 +56,48 @@ public class RAGNAIF {
         embeddingStore.addAll(embeddings, segments);
         System.out.println("Enregistrement des embeddings terminé avec succès !");
 
+        String cle = System.getenv("GEMINI_KEY");
+        if (cle == null) {
+            throw new IllegalStateException("Variable d'environnement GEMINI_KEY manquante !!!");
+        }
+
+        // Création du modèle de chat Gemini
+        ChatModel model = GoogleAiGeminiChatModel.builder()
+                .apiKey(cle)
+                .temperature(0.3)
+                .modelName("gemini-2.5-flash")
+                .build();
+
+        // Création du ContentRetriever
+        EmbeddingStoreContentRetriever retriever = EmbeddingStoreContentRetriever.builder()
+                .embeddingStore(embeddingStore)
+                .embeddingModel(embeddingModel)
+                .maxResults(2)
+                .minScore(0.5)
+                .build();
+
+        // Ajout d'une mémoire de 10 messages
+        var memory = MessageWindowChatMemory.withMaxMessages(10);
+
+        // Création de l’assistant
+        Assistant assistant = AiServices.builder(Assistant.class)
+                .chatModel(model)
+                .chatMemory(memory)
+                .contentRetriever(retriever)
+                .build();
+
+        //  Interaction console (multi-questions)
+        try (Scanner scanner = new Scanner(System.in)) {
+            System.out.println("Posez votre question :");
+            while (true) {
+                System.out.print("(Tapez 'bye' pour quitter) Vous : ");
+                String question = scanner.nextLine();
+                if (question.equalsIgnoreCase("bye"))
+                    break;
+                String reponse = assistant.chat(question);
+                System.out.println("Gemini : " + reponse);
+            }
+        }
 
 
     }
